@@ -1,7 +1,9 @@
 /**
- * "Don't Touch The Cats" — a tiny survival minigame.
+ * "Don't Touch The Cats" — a tiny survival minigame with Korean word typing.
  *
  * Cats drift around the page; if one intersects the pointer, the site explodes.
+ * Players must type Korean words (romanized) to eliminate cats before they collide
+ * with the cursor.
  * Physics run on a fixed timestep with swept collision so behaviour stays fair
  * regardless of frame rate, and all timing is measured against an "active time"
  * clock that excludes paused, hidden, exploding and game-over intervals.
@@ -35,6 +37,39 @@
 		GAME_OVER: "gameover",
 	};
 
+	const wordPairs = [
+		{ language1: "gage 가게", language2: 'store' },
+		{ language1: "gada 가다", language2: 'to go' },
+		{ language1: "galeuchida 가르치다", language2: 'to teach' },
+		{ language1: "gabang 가방", language2: 'bag' },
+		{ language1: "gabyeobda 가볍다", language2: 'to be light' },
+		{ language1: "gasu 가수", language2: 'singer' },
+		{ language1: "gajog 가족", language2: 'family' },
+		{ language1: "gamgi 감기", language2: 'a cold' },
+		{ language1: "gamja 감자", language2: 'potato' },
+		{ language1: "gae 개", language2: 'dog' },
+		{ language1: "geosil 거실", language2: 'living room' },
+		{ language1: "geoul 거울", language2: 'mirror' },
+		{ language1: "geojismal 거짓말", language2: 'a lie' },
+		{ language1: "geongang 건강", language2: 'health' },
+		{ language1: "geonneoda 건너다", language2: 'to cross' },
+		{ language1: "geodda 걷다", language2: 'to walk' },
+		{ language1: "geom-eunsaeg 검은색", language2: 'black' },
+		{ language1: "gyeoul 겨울", language2: 'winter' },
+		{ language1: "gyeolhon 결혼", language2: 'marriage' },
+		{ language1: "gyeongchal 경찰", language2: 'police' },
+		{ language1: "gyehoeg 계획", language2: 'plan' },
+		{ language1: "gogi 고기", language2: 'meat' },
+		{ language1: "goleuda 고르다", language2: 'to pick' },
+		{ language1: "goyang-i 고양이", language2: 'cat' },
+		{ language1: "gong-won 공원", language2: 'park' },
+		{ language1: "gongchaeg 공책", language2: 'notebook' },
+		{ language1: "gonghang 공항", language2: 'airport' },
+		{ language1: "gwail 과일", language2: 'fruit' },
+		{ language1: "gyosil 교실", language2: 'classroom' },
+		{ language1: "guleum 구름", language2: 'cloud' }
+	];
+
 	const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 	const dom = {
@@ -51,9 +86,22 @@
 		finalBest: document.getElementById("finalBest"),
 		restart: document.getElementById("restart"),
 		debris: Array.from(document.querySelectorAll("[data-debris]")),
+		bgMusic: document.getElementById("bgMusic"),
+		buzzerSound: document.getElementById("buzzerSound"),
+		gameOverSound: document.getElementById("gameOverSound"),
+		musicToggle: document.getElementById("musicToggle"),
 	};
 
 	const ctx = dom.canvas.getContext("2d");
+
+	// Audio sources from tgai repository
+	const AUDIO_URLS = {
+		bgMusic: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/bg-music.mp3",
+		buzzer: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/buzzer.ogg",
+		gameOver: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/boom.ogg",
+	};
+
+	let isMusicPlaying = true;
 
 	/** Reads the stored best time, tolerating unavailable or corrupt storage. */
 	function loadBest() {
@@ -85,6 +133,8 @@
 		accumulator: 0,
 		rafId: 0,
 		timeouts: new Set(),
+		wordList: [...wordPairs],
+		currentInput: "",
 	};
 
 	const pointer = {
@@ -94,6 +144,73 @@
 		armed: false, // actually dangerous right now
 		isTouch: false,
 	};
+
+	/** Initialize audio elements */
+	function initAudio() {
+		dom.bgMusic.src = AUDIO_URLS.bgMusic;
+		dom.bgMusic.volume = 0.5;
+		dom.buzzerSound.src = AUDIO_URLS.buzzer;
+		dom.buzzerSound.volume = 0.7;
+		dom.gameOverSound.src = AUDIO_URLS.gameOver;
+		dom.gameOverSound.volume = 0.8;
+	}
+
+	/** Toggle background music */
+	function toggleMusic() {
+		if (isMusicPlaying) {
+			dom.bgMusic.pause();
+			dom.musicToggle.textContent = "🔇";
+			isMusicPlaying = false;
+		} else {
+			dom.bgMusic.play().catch(() => {
+				/* audio play may fail in some contexts */
+			});
+			dom.musicToggle.textContent = "🔊";
+			isMusicPlaying = true;
+		}
+	}
+
+	/** Play buzzer sound for incorrect input */
+	function playBuzzer() {
+		dom.buzzerSound.currentTime = 0;
+		dom.buzzerSound.play().catch(() => {
+			/* audio play may fail in some contexts */
+		});
+	}
+
+	/** Play game over sound */
+	function playGameOverSound() {
+		dom.gameOverSound.currentTime = 0;
+		dom.gameOverSound.play().catch(() => {
+			/* audio play may fail in some contexts */
+		});
+	}
+
+	/** Normalize text for matching: remove accents, normalize apostrophes, lowercase */
+	function normalizeForMatching(text) {
+		return text
+			.toLowerCase()
+			.normalize("NFD")
+			.replace(/[\u0300-\u036f]/g, "") // Remove diacritical marks
+			.replace(/[''`]/g, "'"); // Normalize apostrophes
+	}
+
+	/** Extract just the Latin script part of the word (before the Korean characters) */
+	function extractLatinWord(language1) {
+		const match = language1.match(/^([a-z\s-]+)/i);
+		return match ? match[1].trim() : "";
+	}
+
+	/** Get random unused word and remove it from the pool */
+	function getRandomWord() {
+		if (game.wordList.length === 0) {
+			game.wordList = [...wordPairs];
+		}
+		const index = Math.floor(Math.random() * game.wordList.length);
+		const word = game.wordList[index];
+		game.wordList.splice(index, 1);
+		return word;
+	}
 
 	/** Registers a timeout so every pending callback can be cancelled on reset. */
 	function later(fn, ms) {
@@ -122,7 +239,8 @@
 	const CAT_SVG = `
 <svg class="cat-inner" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <g class="cat-body">
-    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b2154" stroke-width="4" stroke-linejoin="round"/>
+    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
+    <path d="M22 18c-2-3-4-7-8-9-2-1-4-1-4 2s1 6 3 8c2 2 5 2 8 2M78 18c2-3 4-7 8-9 2-1 4-1 4 2s-1 6-3 8c-2 2-5 2-8 2" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
     <circle cx="38" cy="52" r="6" fill="#3b2154"/>
     <circle cx="62" cy="52" r="6" fill="#3b2154"/>
     <circle cx="40" cy="50" r="2" fill="#fff"/>
@@ -141,6 +259,19 @@
 		const el = document.createElement("div");
 		el.className = "cat spawning";
 		el.innerHTML = CAT_SVG;
+
+		const wordPair = getRandomWord();
+		const latinWord = extractLatinWord(wordPair.language1);
+
+		// Create word label
+		const label = document.createElement("div");
+		label.className = "cat-label";
+		label.innerHTML = `
+			<div class="cat-word">${latinWord}</div>
+			<div class="cat-translation">${wordPair.language2}</div>
+		`;
+		el.appendChild(label);
+
 		dom.catLayer.appendChild(el);
 
 		const cat = {
@@ -152,6 +283,9 @@
 			bornAt: game.activeTime,
 			el,
 			inner: el.querySelector(".cat-inner"),
+			word: latinWord,
+			normalizedWord: normalizeForMatching(latinWord),
+			translation: wordPair.language2,
 		};
 		game.cats.push(cat);
 		later(() => el.classList.remove("spawning"), CONFIG.spawnIntroSeconds * 1000);
@@ -308,6 +442,31 @@
 		dom.catCount.textContent = String(game.cats.length);
 	}
 
+	/** Remove a cat when word is correctly typed */
+	function removeCatByWord(cat) {
+		cat.el.classList.add("disappearing");
+		later(() => {
+			cat.el.remove();
+			game.cats = game.cats.filter((c) => c !== cat);
+			dom.catCount.textContent = String(game.cats.length);
+		}, CONFIG.spawnIntroSeconds * 1000);
+	}
+
+	/** Check for typed word matches and remove cats */
+	function checkWordMatch() {
+		const normalizedInput = normalizeForMatching(game.currentInput);
+		for (const cat of [...game.cats]) {
+			if (cat.normalizedWord === normalizedInput) {
+				removeCatByWord(cat);
+				game.currentInput = "";
+				showBanner(`Typed: ${cat.word} ✓`);
+				later(() => showBanner(""), 1600);
+				return true;
+			}
+		}
+		return false;
+	}
+
 	function loop(timestamp) {
 		game.rafId = window.requestAnimationFrame(loop);
 
@@ -367,6 +526,14 @@
 		if (game.state === STATE.EXPLODING || game.state === STATE.GAME_OVER) return;
 		game.state = STATE.EXPLODING;
 		showBanner("");
+
+		// Stop music on game over
+		if (dom.bgMusic && isMusicPlaying) {
+			dom.bgMusic.pause();
+		}
+
+		// Play game over sound
+		playGameOverSound();
 
 		const finalMs = game.activeTime * 1000;
 		if (finalMs > game.bestMs) {
@@ -471,7 +638,17 @@
 		game.accumulator = 0;
 		game.nextSpawnAt = CONFIG.spawnEvery;
 		game.lastFrame = 0;
+		game.currentInput = "";
+		game.wordList = [...wordPairs];
 		updateHud();
+
+		// Restart background music
+		if (isMusicPlaying) {
+			dom.bgMusic.currentTime = 0;
+			dom.bgMusic.play().catch(() => {
+				/* audio play may fail in some contexts */
+			});
+		}
 
 		spawnCat();
 		startRound();
@@ -483,7 +660,7 @@
 		if (pointer.active) {
 			game.state = STATE.GRACE;
 			showBanner("Get ready…");
-			dom.hint.textContent = "Keep your cursor away from the cats!";
+			dom.hint.textContent = "Type Korean words to remove the cats!";
 		} else {
 			game.state = STATE.IDLE;
 			showBanner(
@@ -501,7 +678,7 @@
 		graceTarget = game.activeTime + CONFIG.graceSeconds;
 		// Never let a spawn land during the resume grace window.
 		game.nextSpawnAt = Math.max(game.nextSpawnAt, graceTarget);
-		dom.hint.textContent = "Keep your cursor away from the cats!";
+		dom.hint.textContent = "Type Korean words to remove the cats!";
 		showBanner("Get ready…");
 	}
 
@@ -582,17 +759,48 @@
 	window.addEventListener("resize", resizeCanvas);
 	window.addEventListener("blur", () => pauseGame("Paused."));
 
+	// Keyboard input for typing words
+	document.addEventListener("keydown", (event) => {
+		if (game.state !== STATE.RUNNING && game.state !== STATE.GRACE) return;
+
+		// Only accept alphabetic characters and apostrophes
+		if (event.key.length === 1) {
+			const char = event.key;
+			if (/^[a-zA-Z'-]$/.test(char)) {
+				game.currentInput += char;
+				if (checkWordMatch()) {
+					// Word matched successfully
+				}
+			} else if (char !== ' ') {
+				// Invalid character
+				playBuzzer();
+				event.preventDefault();
+			}
+		} else if (event.key === "Backspace") {
+			game.currentInput = game.currentInput.slice(0, -1);
+		}
+	});
+
 	dom.restart.addEventListener("click", () => {
 		pointer.armed = !pointer.isTouch && pointer.active;
 		resetGame();
 	});
 
+	dom.musicToggle.addEventListener("click", toggleMusic);
+
 	/* ---------------------------------------------------------------- *
 	 * Boot
 	 * ---------------------------------------------------------------- */
 
+	initAudio();
 	resizeCanvas();
 	updateHud();
+
+	// Start playing background music
+	dom.bgMusic.play().catch(() => {
+		/* audio play may fail in some contexts */
+	});
+
 	spawnCat();
 	startRound();
 	game.rafId = window.requestAnimationFrame(loop);
