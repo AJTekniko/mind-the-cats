@@ -311,6 +311,81 @@ a:hover {
 	opacity: 1;
 }
 
+.word-status {
+	position: fixed;
+	bottom: 1rem;
+	left: 1rem;
+	z-index: 6;
+	padding: 1rem;
+	background: rgba(0, 0, 0, 0.5);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	min-width: 200px;
+	max-width: 280px;
+	pointer-events: none;
+	opacity: 0;
+	transition: opacity 200ms ease;
+}
+
+.word-status.visible {
+	opacity: 1;
+}
+
+.status-label {
+	font-size: 0.75rem;
+	color: var(--muted);
+	text-transform: uppercase;
+	letter-spacing: 1px;
+	margin-bottom: 0.5rem;
+}
+
+.status-content {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+
+.status-korean {
+	font-size: 1.2rem;
+	font-weight: 700;
+	color: var(--accent-2);
+	text-align: center;
+	min-height: 1.5rem;
+}
+
+.status-word {
+	font-size: 1rem;
+	font-weight: 600;
+	color: var(--accent);
+	text-align: center;
+	letter-spacing: 0.5px;
+	min-height: 1.25rem;
+}
+
+.status-word-highlighted {
+	display: inline-block;
+	background: linear-gradient(90deg, var(--accent-2) 0%, var(--accent-2) var(--progress, 0%), var(--accent) var(--progress, 0%), var(--accent) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.status-translation {
+	font-size: 0.8rem;
+	color: var(--muted);
+	text-align: center;
+	opacity: 0.7;
+	min-height: 1rem;
+}
+
+.status-progress {
+	font-size: 0.75rem;
+	color: var(--accent-2);
+	text-align: center;
+	opacity: 0.8;
+	min-height: 1rem;
+}
+
 .overlay {
 	position: fixed;
 	inset: 0;
