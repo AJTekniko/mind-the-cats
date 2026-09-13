@@ -207,22 +207,26 @@ a:hover {
 .latin-word {
 	display: inline-block;
 	position: relative;
+	background: linear-gradient(90deg, var(--accent-2) 0%, var(--accent-2) var(--progress, 0%), var(--accent) var(--progress, 0%), var(--accent) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	-webkit-text-fill-color: transparent;
+	transition: --progress 150ms ease;
 }
 
-/* Highlight effect for typed letters */
 .latin-word.matching {
 	animation: pulse-match 300ms ease;
 }
 
 @keyframes pulse-match {
 	0% {
-		text-shadow: 0 0 0 var(--accent-2);
+		filter: drop-shadow(0 0 0 var(--accent-2));
 	}
 	50% {
-		text-shadow: 0 0 8px var(--accent-2);
+		filter: drop-shadow(0 0 8px var(--accent-2));
 	}
 	100% {
-		text-shadow: 0 0 0 var(--accent-2);
+		filter: drop-shadow(0 0 0 var(--accent-2));
 	}
 }
 
@@ -249,7 +253,7 @@ a:hover {
 
 .hud {
 	top: 1rem;
-	right: 1rem;
+	left: 1rem;
 	display: flex;
 	gap: 0.75rem;
 	padding: 0.5rem 0.9rem;
