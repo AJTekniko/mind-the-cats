@@ -47,7 +47,7 @@
 		</div>
 
 		<div class="hud" id="hud">
-			<button class="music-toggle" id="musicToggle" title="Toggle background music">🔊</button>
+			<button class="music-toggle" id="musicToggle" title="Toggle music">🔇</button>
 			<span class="hud-item">⏱ <strong id="timer">0.00</strong>s</span>
 			<span class="hud-item">🏆 <strong id="best">0.00</strong>s</span>
 			<span class="hud-item">🐱 <strong id="catCount">1</strong></span>
@@ -67,9 +67,9 @@
 			</div>
 		</div>
 
-		<audio id="bgMusic" loop></audio>
-		<audio id="buzzerSound"></audio>
-		<audio id="gameOverSound"></audio>
+		<audio id="bgMusic" loop crossorigin="anonymous"></audio>
+		<audio id="buzzerSound" crossorigin="anonymous"></audio>
+		<audio id="gameOverSound" crossorigin="anonymous"></audio>
 
 		<script src="game.js" defer></script>
 	</body>
