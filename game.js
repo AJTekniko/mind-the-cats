@@ -90,6 +90,11 @@
 		buzzerSound: document.getElementById("buzzerSound"),
 		gameOverSound: document.getElementById("gameOverSound"),
 		musicToggle: document.getElementById("musicToggle"),
+		wordStatus: document.getElementById("wordStatus"),
+		statusKorean: document.getElementById("statusKorean"),
+		statusWord: document.getElementById("statusWord"),
+		statusTranslation: document.getElementById("statusTranslation"),
+		statusProgress: document.getElementById("statusProgress"),
 	};
 
 	const ctx = dom.canvas.getContext("2d");
@@ -201,6 +206,21 @@
 		});
 	}
 
+	/** Speak Korean word using Web Speech API */
+	function speakKorean(koreanText) {
+		if (!window.speechSynthesis) return;
+		
+		// Cancel any ongoing speech
+		window.speechSynthesis.cancel();
+		
+		const utterance = new SpeechSynthesisUtterance(koreanText);
+		utterance.lang = 'ko-KR';
+		utterance.rate = 0.9;
+		utterance.pitch = 1;
+		
+		window.speechSynthesis.speak(utterance);
+	}
+
 	/** Normalize text for matching: remove accents, normalize apostrophes, lowercase */
 	function normalizeForMatching(text) {
 		return text
@@ -256,7 +276,7 @@
 	const CAT_SVG = `
 <svg class="cat-inner" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <g class="cat-body">
-    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
+    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b21[...]
     <path d="M22 18c-2-3-4-7-8-9-2-1-4-1-4 2s1 6 3 8c2 2 5 2 8 2M78 18c2-3 4-7 8-9 2-1 4-1 4 2s-1 6-3 8c-2 2-5 2-8 2" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
     <circle cx="38" cy="52" r="6" fill="#3b2154"/>
     <circle cx="62" cy="52" r="6" fill="#3b2154"/>
@@ -305,6 +325,7 @@
 			inner: el.querySelector(".cat-inner"),
 			wordLabel: label,
 			latinWord: latinWord,
+			koreanChars: koreanChars,
 			normalizedWord: normalizeForMatching(latinWord),
 			translation: wordPair.language2,
 			spawnOrder: game.cats.length, // Track spawn order
@@ -464,6 +485,32 @@
 		dom.catCount.textContent = String(game.cats.length);
 	}
 
+	/** Update word status display at bottom-left */
+	function updateWordStatus() {
+		if (!game.activeCat) {
+			dom.wordStatus.classList.remove("visible");
+			return;
+		}
+
+		dom.wordStatus.classList.add("visible");
+		dom.statusKorean.textContent = game.activeCat.koreanChars;
+		
+		const normalizedInput = normalizeForMatching(game.currentInput);
+		const progress = (normalizedInput.length / game.activeCat.normalizedWord.length) * 100;
+		
+		// Create word with progress highlighting
+		const latinWord = game.activeCat.latinWord;
+		const typed = latinWord.substring(0, normalizedInput.length);
+		const remaining = latinWord.substring(normalizedInput.length);
+		
+		dom.statusWord.innerHTML = `
+			<span class="status-word-highlighted" style="--progress: ${progress}%">${latinWord}</span>
+		`;
+		
+		dom.statusTranslation.textContent = game.activeCat.translation;
+		dom.statusProgress.textContent = `${Math.round(progress)}% — Type to continue`;
+	}
+
 	/** Update word highlighting based on current input */
 	function updateWordHighlighting() {
 		const normalizedInput = normalizeForMatching(game.currentInput);
@@ -478,6 +525,7 @@
 				}
 			}
 			game.activeCat = null;
+			updateWordStatus();
 		} else {
 			// Find the first (oldest spawn) cat whose word matches the current input prefix
 			let firstMatching = null;
@@ -505,6 +553,8 @@
 					latinWordElement.style.setProperty("--progress", "0%");
 				}
 			}
+			
+			updateWordStatus();
 		}
 	}
 
@@ -526,12 +576,18 @@
 
 		const normalizedInput = normalizeForMatching(game.currentInput);
 		if (game.activeCat.normalizedWord === normalizedInput && normalizedInput.length > 0) {
-			removeCatByWord(game.activeCat);
+			const completedCat = game.activeCat;
+			
+			// Speak the Korean word
+			speakKorean(completedCat.koreanChars);
+			
+			removeCatByWord(completedCat);
 			game.currentInput = "";
 			game.activeCat = null;
 			updateWordHighlighting();
-			showBanner(`✓ ${game.activeCat?.latinWord || "word"}`);
+			showBanner(`✓ ${completedCat.latinWord}`);
 			later(() => showBanner(""), 1600);
+			updateWordStatus();
 			return true;
 		}
 		return false;
@@ -707,6 +763,7 @@
 			piece.style.removeProperty("--ds");
 		}
 		dom.overlay.hidden = true;
+		dom.wordStatus.classList.remove("visible");
 
 		game.activeTime = 0;
 		game.accumulator = 0;
