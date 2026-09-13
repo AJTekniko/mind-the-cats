@@ -198,6 +198,39 @@ a:hover {
 	font-size: 0.95rem;
 	color: var(--accent);
 	letter-spacing: 0.5px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	justify-content: center;
+}
+
+.latin-word {
+	display: inline-block;
+	position: relative;
+}
+
+/* Highlight effect for typed letters */
+.latin-word.matching {
+	animation: pulse-match 300ms ease;
+}
+
+@keyframes pulse-match {
+	0% {
+		text-shadow: 0 0 0 var(--accent-2);
+	}
+	50% {
+		text-shadow: 0 0 8px var(--accent-2);
+	}
+	100% {
+		text-shadow: 0 0 0 var(--accent-2);
+	}
+}
+
+.korean-chars {
+	font-size: 0.85rem;
+	font-weight: 600;
+	color: var(--accent-2);
+	opacity: 0.9;
 }
 
 .cat-translation {
@@ -347,6 +380,10 @@ button:focus-visible {
 	}
 
 	.cat.disappearing .cat-inner {
+		animation: none;
+	}
+
+	.latin-word.matching {
 		animation: none;
 	}
 }
