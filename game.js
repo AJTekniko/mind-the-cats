@@ -136,6 +136,7 @@
 		timeouts: new Set(),
 		wordList: [...wordPairs],
 		currentInput: "",
+		activeCat: null, // The cat being typed for (oldest one matching first letter)
 	};
 
 	const pointer = {
@@ -306,6 +307,7 @@
 			latinWord: latinWord,
 			normalizedWord: normalizeForMatching(latinWord),
 			translation: wordPair.language2,
+			spawnOrder: game.cats.length, // Track spawn order
 		};
 		game.cats.push(cat);
 		later(() => el.classList.remove("spawning"), CONFIG.spawnIntroSeconds * 1000);
@@ -464,19 +466,43 @@
 
 	/** Update word highlighting based on current input */
 	function updateWordHighlighting() {
-		for (const cat of game.cats) {
-			const normalizedInput = normalizeForMatching(game.currentInput);
-			const catNormalizedWord = cat.normalizedWord;
-			const latinWordElement = cat.wordLabel.querySelector(".latin-word");
-			
-			if (latinWordElement) {
-				// Check if this cat's word starts with the current input
-				if (normalizedInput.length > 0 && catNormalizedWord.startsWith(normalizedInput)) {
-					if (!latinWordElement.classList.contains("matching")) {
-						latinWordElement.classList.add("matching");
+		const normalizedInput = normalizeForMatching(game.currentInput);
+
+		if (normalizedInput.length === 0) {
+			// Clear all highlighting
+			for (const cat of game.cats) {
+				const latinWordElement = cat.wordLabel.querySelector(".latin-word");
+				if (latinWordElement) {
+					latinWordElement.classList.remove("matching");
+					latinWordElement.style.setProperty("--progress", "0%");
+				}
+			}
+			game.activeCat = null;
+		} else {
+			// Find the first (oldest spawn) cat whose word matches the current input prefix
+			let firstMatching = null;
+			for (const cat of game.cats) {
+				if (cat.normalizedWord.startsWith(normalizedInput)) {
+					if (!firstMatching || cat.spawnOrder < firstMatching.spawnOrder) {
+						firstMatching = cat;
 					}
+				}
+			}
+
+			// Update all cats' highlighting
+			for (const cat of game.cats) {
+				const latinWordElement = cat.wordLabel.querySelector(".latin-word");
+				if (!latinWordElement) continue;
+
+				if (cat === firstMatching) {
+					// This is the active cat for typing
+					game.activeCat = cat;
+					latinWordElement.classList.add("matching");
+					const progress = (normalizedInput.length / cat.normalizedWord.length) * 100;
+					latinWordElement.style.setProperty("--progress", `${progress}%`);
 				} else {
 					latinWordElement.classList.remove("matching");
+					latinWordElement.style.setProperty("--progress", "0%");
 				}
 			}
 		}
@@ -486,7 +512,9 @@
 	function removeCatByWord(cat) {
 		cat.el.classList.add("disappearing");
 		later(() => {
-			cat.el.remove();
+			if (cat.el.parentNode) {
+				cat.el.remove();
+			}
 			game.cats = game.cats.filter((c) => c !== cat);
 			dom.catCount.textContent = String(game.cats.length);
 		}, CONFIG.spawnIntroSeconds * 1000);
@@ -494,16 +522,17 @@
 
 	/** Check for typed word matches and remove cats */
 	function checkWordMatch() {
+		if (!game.activeCat) return false;
+
 		const normalizedInput = normalizeForMatching(game.currentInput);
-		for (const cat of [...game.cats]) {
-			if (cat.normalizedWord === normalizedInput && normalizedInput.length > 0) {
-				removeCatByWord(cat);
-				game.currentInput = "";
-				updateWordHighlighting();
-				showBanner(`✓ ${cat.latinWord}`);
-				later(() => showBanner(""), 1600);
-				return true;
-			}
+		if (game.activeCat.normalizedWord === normalizedInput && normalizedInput.length > 0) {
+			removeCatByWord(game.activeCat);
+			game.currentInput = "";
+			game.activeCat = null;
+			updateWordHighlighting();
+			showBanner(`✓ ${game.activeCat?.latinWord || "word"}`);
+			later(() => showBanner(""), 1600);
+			return true;
 		}
 		return false;
 	}
@@ -572,6 +601,7 @@
 		if (dom.bgMusic && isMusicPlaying) {
 			dom.bgMusic.pause();
 			isMusicPlaying = false;
+			dom.musicToggle.textContent = "🔇";
 		}
 
 		// Play game over sound
@@ -664,6 +694,8 @@
 		for (const cat of game.cats) cat.el.remove();
 		game.cats = [];
 		game.particles = [];
+		game.currentInput = "";
+		game.activeCat = null;
 		ctx.clearRect(0, 0, dom.canvas.width, dom.canvas.height);
 
 		dom.shakeRoot.classList.remove("shaking");
@@ -680,12 +712,13 @@
 		game.accumulator = 0;
 		game.nextSpawnAt = CONFIG.spawnEvery;
 		game.lastFrame = 0;
-		game.currentInput = "";
 		game.wordList = [...wordPairs];
 		updateHud();
 
 		// Restart background music
-		if (isMusicPlaying && musicStarted) {
+		if (musicStarted) {
+			isMusicPlaying = true;
+			dom.musicToggle.textContent = "🔊";
 			dom.bgMusic.currentTime = 0;
 			dom.bgMusic.play().catch(() => {
 				/* audio play may fail in some contexts */
@@ -812,23 +845,37 @@
 
 		if (game.state !== STATE.RUNNING && game.state !== STATE.GRACE) return;
 
-		// Only accept alphabetic characters and apostrophes
-		if (event.key.length === 1) {
-			const char = event.key;
-			if (/^[a-zA-Z'-]$/.test(char)) {
-				event.preventDefault();
-				game.currentInput += char;
-				checkWordMatch();
-				updateWordHighlighting();
-			} else if (!/[ ]/.test(char)) {
-				// Invalid character (but allow space)
-				event.preventDefault();
-				playBuzzer();
-			}
-		} else if (event.key === "Backspace") {
+		const key = event.key;
+
+		if (key === "Backspace") {
 			event.preventDefault();
 			game.currentInput = game.currentInput.slice(0, -1);
 			updateWordHighlighting();
+		} else if (key.length === 1 && /^[a-zA-Z'-]$/.test(key)) {
+			event.preventDefault();
+			
+			// Check if this character can be part of any active cat's word
+			const possibleChar = normalizeForMatching(key);
+			const testInput = normalizeForMatching(game.currentInput + key);
+			
+			let foundMatch = false;
+			
+			// Check if the new input still matches a word's prefix
+			for (const cat of game.cats) {
+				if (cat.normalizedWord.startsWith(testInput)) {
+					foundMatch = true;
+					break;
+				}
+			}
+			
+			if (foundMatch) {
+				game.currentInput += key;
+				checkWordMatch();
+				updateWordHighlighting();
+			} else {
+				// Invalid character for current word(s)
+				playBuzzer();
+			}
 		}
 	});
 
