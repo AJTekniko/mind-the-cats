@@ -195,10 +195,12 @@
 			.replace(/[''`]/g, "'"); // Normalize apostrophes
 	}
 
-	/** Extract just the Latin script part of the word (before the Korean characters) */
-	function extractLatinWord(language1) {
-		const match = language1.match(/^([a-z\s-]+)/i);
-		return match ? match[1].trim() : "";
+	/** Extract just the Latin script part and Korean characters from language1 */
+	function parseWord(language1) {
+		const parts = language1.split(/\s+/);
+		const latinWord = parts[0] || "";
+		const koreanChars = parts.slice(1).join(" ") || "";
+		return { latin: latinWord, korean: koreanChars };
 	}
 
 	/** Get random unused word and remove it from the pool */
@@ -239,7 +241,7 @@
 	const CAT_SVG = `
 <svg class="cat-inner" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
   <g class="cat-body">
-    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
+    <path d="M50 92c-16 0-30-9-30-26 0-8 3-15 3-15l-6-24c-.5-2 1.6-3.6 3.4-2.5L38 32a44 44 0 0 1 24 0l17.6-7.5c1.8-1.1 3.9.5 3.4 2.5l-6 24s3 7 3 15c0 17-14 26-30 26Z" fill="#ffd6ec" stroke="#3b21[...]
     <path d="M22 18c-2-3-4-7-8-9-2-1-4-1-4 2s1 6 3 8c2 2 5 2 8 2M78 18c2-3 4-7 8-9 2-1 4-1 4 2s-1 6-3 8c-2 2-5 2-8 2" fill="#ffd6ec" stroke="#3b2154" stroke-width="1.5"/>
     <circle cx="38" cy="52" r="6" fill="#3b2154"/>
     <circle cx="62" cy="52" r="6" fill="#3b2154"/>
@@ -261,13 +263,16 @@
 		el.innerHTML = CAT_SVG;
 
 		const wordPair = getRandomWord();
-		const latinWord = extractLatinWord(wordPair.language1);
+		const { latin: latinWord, korean: koreanChars } = parseWord(wordPair.language1);
 
 		// Create word label
 		const label = document.createElement("div");
 		label.className = "cat-label";
 		label.innerHTML = `
-			<div class="cat-word">${latinWord}</div>
+			<div class="cat-word">
+				<span class="latin-word">${latinWord}</span>
+				<span class="korean-chars">${koreanChars}</span>
+			</div>
 			<div class="cat-translation">${wordPair.language2}</div>
 		`;
 		el.appendChild(label);
@@ -283,7 +288,8 @@
 			bornAt: game.activeTime,
 			el,
 			inner: el.querySelector(".cat-inner"),
-			word: latinWord,
+			wordLabel: label,
+			latinWord: latinWord,
 			normalizedWord: normalizeForMatching(latinWord),
 			translation: wordPair.language2,
 		};
@@ -442,6 +448,27 @@
 		dom.catCount.textContent = String(game.cats.length);
 	}
 
+	/** Update word highlighting based on current input */
+	function updateWordHighlighting() {
+		for (const cat of game.cats) {
+			const normalizedInput = normalizeForMatching(game.currentInput);
+			const catNormalizedWord = cat.normalizedWord;
+			const latinWordElement = cat.wordLabel.querySelector(".latin-word");
+			
+			if (latinWordElement) {
+				latinWordElement.setAttribute("data-progress", normalizedInput.length);
+				latinWordElement.setAttribute("data-target-length", catNormalizedWord.length);
+				
+				// Check if this cat's word starts with the current input
+				if (catNormalizedWord.startsWith(normalizedInput)) {
+					latinWordElement.classList.add("matching");
+				} else {
+					latinWordElement.classList.remove("matching");
+				}
+			}
+		}
+	}
+
 	/** Remove a cat when word is correctly typed */
 	function removeCatByWord(cat) {
 		cat.el.classList.add("disappearing");
@@ -459,7 +486,8 @@
 			if (cat.normalizedWord === normalizedInput) {
 				removeCatByWord(cat);
 				game.currentInput = "";
-				showBanner(`Typed: ${cat.word} ✓`);
+				updateWordHighlighting();
+				showBanner(`Typed: ${cat.latinWord} ✓`);
 				later(() => showBanner(""), 1600);
 				return true;
 			}
@@ -768,9 +796,8 @@
 			const char = event.key;
 			if (/^[a-zA-Z'-]$/.test(char)) {
 				game.currentInput += char;
-				if (checkWordMatch()) {
-					// Word matched successfully
-				}
+				checkWordMatch();
+				updateWordHighlighting();
 			} else if (char !== ' ') {
 				// Invalid character
 				playBuzzer();
@@ -778,6 +805,7 @@
 			}
 		} else if (event.key === "Backspace") {
 			game.currentInput = game.currentInput.slice(0, -1);
+			updateWordHighlighting();
 		}
 	});
 
@@ -796,10 +824,9 @@
 	resizeCanvas();
 	updateHud();
 
-	// Start playing background music
-	dom.bgMusic.play().catch(() => {
-		/* audio play may fail in some contexts */
-	});
+	// Start playing background music when game starts (after user interaction)
+	// Music will only play after mouse movement or pointer interaction
+	// due to browser autoplay restrictions
 
 	spawnCat();
 	startRound();
