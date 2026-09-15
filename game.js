@@ -155,7 +155,7 @@
 	/** Initialize audio elements */
 	function initAudio() {
 		dom.bgMusic.src = AUDIO_URLS.bgMusic;
-		dom.bgMusic.volume = 0.4;
+		dom.bgMusic.volume = 0.3;
 		dom.buzzerSound.src = AUDIO_URLS.buzzer;
 		dom.buzzerSound.volume = 0.5;
 		dom.gameOverSound.src = AUDIO_URLS.gameOver;
