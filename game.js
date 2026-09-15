@@ -101,9 +101,9 @@
 
 	// Audio sources from tgai repository
 	const AUDIO_URLS = {
-		bgMusic: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/bg-music.mp3",
-		buzzer: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/buzzer.ogg",
-		gameOver: "https://raw.githubusercontent.com/AJTekniko/tgai/main/en/boom.ogg",
+		bgMusic: "https://raw.githubusercontent.com/AJTekniko/mind-the-cats/main/files/bg-music.mp3",
+		buzzer: "https://raw.githubusercontent.com/AJTekniko/mind-the-cats/main/files/buzzer.ogg",
+		gameOver: "https://raw.githubusercontent.com/AJTekniko/mind-the-cats/main/files/boom.ogg",
 	};
 
 	let isMusicPlaying = false;
@@ -155,11 +155,11 @@
 	/** Initialize audio elements */
 	function initAudio() {
 		dom.bgMusic.src = AUDIO_URLS.bgMusic;
-		dom.bgMusic.volume = 0.5;
+		dom.bgMusic.volume = 0.4;
 		dom.buzzerSound.src = AUDIO_URLS.buzzer;
-		dom.buzzerSound.volume = 0.7;
+		dom.buzzerSound.volume = 0.5;
 		dom.gameOverSound.src = AUDIO_URLS.gameOver;
-		dom.gameOverSound.volume = 0.8;
+		dom.gameOverSound.volume = 0.5;
 	}
 
 	/** Start music on first user interaction */
